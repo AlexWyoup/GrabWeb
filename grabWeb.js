@@ -38,19 +38,21 @@ var hrefUrl = "http://w3school.com.cn",
     };//存放html文件计数器，文件name
 //创建 文件目录
 function createDir(rootPath, dirNames){
+    !fs.existsSync(rootPath) && fs.mkdirSync(rootPath);
     for(var name in dirNames){
         var path = rootPath + "/" + dirNames[name];
         !fs.existsSync(path) && fs.mkdir(path);
     }
 }
 //创建文件
-function writeFile(dirPath, str){
-    console.log(dirPath);
+function writeFile(str, dirPath){
+    //console.log(dirPath);
+    console.log(new Date().getTime());
     !fs.existsSync(dirPath) && fs.writeFile(dirPath, str);
 }
 //读取指定路径的流
-function readStream(urlObject, callback){
-    console.log(urlObject);
+function readStream(urlObject, callback, path){
+    //console.log(urlObject);
     var htmlStr = "";
     http.get(urlObject, function(res){
         res.setEncoding('binary');
@@ -60,8 +62,7 @@ function readStream(urlObject, callback){
             on('end', function(){
                 var buf = new Buffer(htmlStr, 'binary');
                 htmlStr = iconv.decode(buf, 'gbk');
-                console.log(htmlStr);
-                callback && callback(htmlStr);
+                callback && callback(htmlStr, path);
             }).
             on('error', function(e){
                 console.log(e.message);
@@ -69,7 +70,9 @@ function readStream(urlObject, callback){
     });
 }
 function run(){
-    readStream(urlInfo, grabTitle)
+    console.time("grabWeb");
+    readStream(urlInfo, grabTitle);
+    console.timeEnd("grabWeb");
 }
 //抓取title，并写入流到本地
 function grabTitle(htmlStr){
@@ -83,7 +86,7 @@ function grabTitle(htmlStr){
         regCharset = /(<meta.*charset=)(?:(?:gbk)|(?:gb2312))(.*?\/>)/gim;
     str = str.replace(regCharset, "$1utf-8$2");
     //写入流到本地路径
-    writeFile(htmlInfo.root + "/" + dirName, str);
+    writeFile(str, htmlInfo.root + "/" + dirName);
     htmlInfo.total ++;
 }
 //抓取CSS信息
@@ -99,10 +102,9 @@ function grabCss(htmlStr){
         var rname = regName.exec(result[3]);
         var dirName = result && rname[2] + (cssInfo.total ++) +".css",
             dirPath = cssInfo.root + "/" + dirName;
-        cssInfo.path.push(result[1]);
-        readStream(url.parse(hrefUrl + result[2]), function(str){
-            writeFile(dirPath, str);
-        });
+        //console.log("CSSPATH: " + result[2]);
+        cssInfo.path.push(result[2]);
+        readStream(url.parse(hrefUrl + result[2]), writeFile, dirPath);
         //替换href地址为本地地址
         htmlStr = htmlStr.replace(new RegExp(result[2], "g"), "../css/" + dirName);
         result = regCss.exec(htmlStr);
@@ -119,16 +121,42 @@ function grabJs(htmlStr){
         var jsName = result && result[3] + (jsInfo.total ++) + ".js",
             jsPath = jsInfo.root + "/" + jsName;
         jsInfo.path.push(result[2]);
-        readStream(url.parse(hrefUrl + result[2]), function(str){
-            writeFile(jsPath, str)
-        });
-        htmlStr = htmlStr.replace(result[0], result[1] + "js/" + result[2] + result[4]);
+        readStream(url.parse(hrefUrl + result[2]), writeFile, jsPath);
+        htmlStr = htmlStr.replace(result[0], result[1] + "../js/" + jsName + result[4]);
         result = regJs.exec(htmlStr);
+    }
+    var str = grabHtml(htmlStr);
+    return str;
+}
+//检索所有
+function grabHtml(htmlStr){
+    htmlInfo.path = [];
+    var regA = /(<a.*?href=['"])([^(http)(www)].*?)(['"].*?<\/a>)/gim,
+        result = regA.exec(htmlStr);
+    while(result){
+        var regName = /(.*\/)*(.*)/gim,
+            rname = regName.exec(result[2]),
+            htmlName = rname && rname[2] + (htmlInfo.total ++) + ".html",
+            htmlPath = htmlInfo.root + "/" + htmlName;
+        //console.log("HTMLPATH: " + result[2] + "localPath: " + htmlPath);
+        htmlInfo.path.push(result[2]);
+        readStream(url.parse(hrefUrl + result[2]), writeFile, htmlPath);
+        htmlStr = htmlStr.replace(result[0], result[1] + "../html/" + htmlName + result[3] );
+        result = regA.exec(htmlStr);
     }
     return htmlStr;
 }
-//createDir(["css", "js", "html", "img"]);
-//run();
+//类似java里的set集合
+function set(obj, ary, start, end){
+    var length = ary.length;
+    start || (start = 0);
+    end || (end = length - 1);
+    for(var i = start; i < end; i ++){
+        if(ary[i] === obj){}
+    }
+}
+//createDir(rootDirPath, ["css", "js", "html", "img"]);
+run();
 
 //var root = "http://w3school.com.cn";
 //var rootFile = __dirname + "/root";
@@ -228,13 +256,15 @@ function grabJs(htmlStr){
 //    }
 //};
 //
-run();
+//run();
 function test(){
     var reg = /href=['"](.+?)['"]/im;
     var str = '<link rel="stylesheet" type="text/ss" href="/c4.css" />';
     var result = reg.exec(str);
-    while(result){
-        result = reg.exec(str);
+    var i = 1;
+    while(i < 10){
+        writeFile(imgInfo.root + "/a" + i + ".txt", i );
+        i ++;
     }
 }
 //test();
