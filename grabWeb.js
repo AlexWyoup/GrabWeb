@@ -274,20 +274,5 @@ function isSet(obj, ary){
     }
     return false;
 }
-function test(){
-    var urlobj = url.parse("http://w3school.com.cn/tiy/t.asp?f=jsrf_date");
-    http.get(urlobj, function(res){
-        res.setEncoding('binary');
-        var html = "";
-        res.on('data', function(data){
-            html += data;
-            console.log(data);
-        }).
-            on('end', function(){
-                var buf = new Buffer(html, 'binary');
-                fs.writeFile(rootDirPath + "/t.asp?f=jsrf_date.html", buf);
-            });
-    });
-}
-//test();
+
 run();
