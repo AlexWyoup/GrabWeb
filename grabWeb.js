@@ -13,13 +13,16 @@
 var http = require("http"),
     url = require("url"),
     iconv = require("iconv-lite"),
-    fs = require("fs");
+    fs = require("fs"),
+    buffer = require("buffer");
+
+var arguments = process.argv.splice(2);
 
 var synNum = 0;//异步计数器 用于判断异步全部调用结束
 
 var hrefUrl = "http://w3school.com.cn",
     urlInfo = url.parse(hrefUrl),
-    rootDirPath = __dirname + "/root",
+    rootDirPath = arguments + "/webRoot",//"E:/webroot",//__dirname + "/root",
     cssInfo = {
         root: rootDirPath + "/css",
         path: [],
@@ -62,7 +65,7 @@ function writeFile(str, dirPath){
 
 }
 //读取指定路径的流
-function readStream(urlObject, callback, path){
+function readStream(urlObject, callback, path, isImg){
     //console.log(urlObject);
     http.get(urlObject, function(res){
         var htmlStr = "",
@@ -75,7 +78,12 @@ function readStream(urlObject, callback, path){
             on('end', function(){
                 var buf = new Buffer(htmlStr, 'binary');
                 htmlStr = iconv.decode(buf, 'gbk');
-                callback && callback(htmlStr, path, hrefUrl + result[1]);
+                //callback 参数0为 写入数据， 1为写入路径， 2为服务器当前文件目录
+                if(isImg){
+                    callback && callback(buf, path, hrefUrl + result[1]);
+                }else{
+                    callback && callback(htmlStr, path, hrefUrl + result[1]);
+                }
 
             }).
             on('error', function(e){
@@ -128,7 +136,7 @@ function grabCss(htmlStr, relativeDir){
             dirName = oldName;
         }else{
             cssInfo.path.push([grabPath, dirName]);
-            readStream(url.parse(grabPath), writeFile, dirPath);
+            readStream(url.parse(grabPath), grabImgByCSS, dirPath);
             synNum ++;
             cssInfo.total ++;
         }
@@ -168,10 +176,36 @@ function grabJs(htmlStr, relativeDir){
         result = regJs.exec(htmlStr);
 
     }
+    var str = grabImg(htmlStr, relativeDir);
+    return str;
+}
+function grabImg(htmlStr, relativeDir){
+    var regImg = /(<img.*?src=['"])(\S+?)(['"].*\/>)/gim,
+        isRoot = /^\//,//检测是否相对于根目录
+        result = regImg.exec(htmlStr);
+    while(result){
+        var imgName = "img" + (imgInfo.total ++) + ".jpg",
+            imgPath = imgInfo.root + "/" + imgName,
+            grabPath = hrefUrl + result[2];
+        if(!isRoot.test(result[2])){
+            grabPath = relativeDir + result[2];
+        }
+        var oldName = isSet(grabPath, imgInfo.path);
+        if(oldName){
+            imgName = oldName;
+            imgInfo.total --;
+        }else{
+            imgInfo.path.push([grabPath, imgName]);
+            readStream(url.parse(grabPath), writeFile, imgPath, true);
+            synNum ++;
+        }
+        htmlStr = htmlStr.replace(result[0], result[1] + "../img/" + imgName + result[3]);
+        result = regImg.exec(htmlStr);
+    }
     var str = grabHtml(htmlStr, relativeDir);
     return str;
 }
-//检索所有
+//检索所有a链接
 function grabHtml(htmlStr, relativeDir){
     //htmlInfo.path = [];
     var regA = /(<a.*?href=['"])([^(http)(www)(#)]\S+?)(['"].*?<\/a>)/gim,
@@ -180,7 +214,7 @@ function grabHtml(htmlStr, relativeDir){
     while(result){
         var regName = /(.*\/)*(.*)/gim,
             rname = regName.exec(result[2]),
-            htmlName = rname && rname[2] + (htmlInfo.total ++) + ".html",//本地fileName
+            htmlName = "web" + (htmlInfo.total ++) + ".html",//本地fileName
             htmlPath = htmlInfo.root + "/" + htmlName;//本地路径
         var grabPath = hrefUrl + result[2];//服务器路径
         if(!isRoot.test(result[2])){
@@ -195,15 +229,40 @@ function grabHtml(htmlStr, relativeDir){
         }else{
             console.log("HTMLPATH:" + grabPath+ "     " + result[0]);
             htmlInfo.path.push([grabPath, htmlName]);
-            readStream(url.parse(grabPath), grabTitle, htmlPath);
+            //readStream(url.parse(grabPath), grabTitle, htmlPath);
             synNum ++;
         }
         htmlStr = htmlStr.replace(result[0],  result[1] + "../html/" + htmlName + result[3]);
         result = regA.exec(htmlStr);
 
     }
-
     return htmlStr;
+}
+function grabImgByCSS(cssStr, path, relativeDir){
+    var regImg = /(url.*?\(['"]*)(\S+?)(['"]*?\))/gim,
+        isRoot = /^\//,//检测是否相对于根目录
+        result = regImg.exec(cssStr);
+    while(result){
+        var imgName = "img" + (imgInfo.total ++) + ".jpg",
+            imgPath = imgInfo.root + "/" + imgName,
+            grabPath = hrefUrl + result[2];
+        if(!isRoot.test(result[2])){
+            grabPath = relativeDir + result[2];
+        }
+        var oldName = isSet(grabPath, imgInfo.path);
+        if(oldName){
+            imgName = oldName;
+            imgInfo.total --;
+        }else{
+            console.log(grabPath);
+            imgInfo.path.push([grabPath, imgName]);
+            readStream(url.parse(grabPath), writeFile, imgPath, true);
+            synNum ++;
+        }
+        cssStr = cssStr.replace(result[0], result[1] + "../img/" + imgName + result[3]);
+        result = regImg.exec(cssStr);
+    }
+    writeFile(cssStr, path);
 }
 //类似java里的set集合
 function isSet(obj, ary){
@@ -215,5 +274,20 @@ function isSet(obj, ary){
     }
     return false;
 }
-
+function test(){
+    var urlobj = url.parse("http://w3school.com.cn/tiy/t.asp?f=jsrf_date");
+    http.get(urlobj, function(res){
+        res.setEncoding('binary');
+        var html = "";
+        res.on('data', function(data){
+            html += data;
+            console.log(data);
+        }).
+            on('end', function(){
+                var buf = new Buffer(html, 'binary');
+                fs.writeFile(rootDirPath + "/t.asp?f=jsrf_date.html", buf);
+            });
+    });
+}
+//test();
 run();
