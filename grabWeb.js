@@ -229,7 +229,7 @@ function grabHtml(htmlStr, relativeDir){
         }else{
             console.log("HTMLPATH:" + grabPath+ "     " + result[0]);
             htmlInfo.path.push([grabPath, htmlName]);
-            //readStream(url.parse(grabPath), grabTitle, htmlPath);
+            readStream(url.parse(grabPath), grabTitle, htmlPath);
             synNum ++;
         }
         htmlStr = htmlStr.replace(result[0],  result[1] + "../html/" + htmlName + result[3]);
